@@ -1,0 +1,77 @@
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+
+import '../../../core/api_client.dart';
+import '../../_shared/app_menu.dart';
+import '../model/{{e.route}}.dart';
+
+class {{e.name}}ListPage extends ConsumerStatefulWidget {
+  const {{e.name}}ListPage({super.key});
+
+  @override
+  ConsumerState<{{e.name}}ListPage> createState() => _{{e.name}}ListPageState();
+}
+
+class _{{e.name}}ListPageState extends ConsumerState<{{e.name}}ListPage> {
+  late Future<List<{{e.name}}>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _load();
+  }
+
+  Future<List<{{e.name}}>> _load() async {
+    final api = ref.read(apiClientProvider);
+    final res = await api.get<List<dynamic>>('/api/{{e.route}}');
+    final data = res.data ?? const <dynamic>[];
+    return data
+        .map((j) => {{e.name}}.fromJson(j as Map<String, dynamic>))
+        .toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('{{e.name}}')),
+      drawer: const AppMenuDrawer(), // <-- menú lateral
+      floatingActionButton: FloatingActionButton(
+        onPressed: () async {
+          await context.push('/{{e.route}}/new');
+          if (!mounted) return;
+          setState(() => _future = _load());
+        },
+        child: const Icon(Icons.add),
+      ),
+      body: FutureBuilder<List<{{e.name}}>>(
+        future: _future,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final items = snapshot.data ?? const <{{e.name}}>[];
+          if (items.isEmpty) {
+            return const Center(child: Text('Sin datos'));
+          }
+          return ListView.separated(
+            itemCount: items.length,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (context, i) {
+              final it = items[i];
+              return ListTile(
+                title: Text(it.titleText),
+                subtitle: Text(it.subtitleText),
+                onTap: () async {
+                  await context.push('/{{e.route}}/${it.idOrEmpty}');
+                  if (!mounted) return;
+                  setState(() => _future = _load());
+                },
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+}

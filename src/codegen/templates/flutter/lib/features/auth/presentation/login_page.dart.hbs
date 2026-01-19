@@ -1,0 +1,88 @@
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+
+import '../data/auth_repository.dart';
+
+class LoginPage extends ConsumerStatefulWidget {
+  const LoginPage({super.key});
+
+  @override
+  ConsumerState<LoginPage> createState() => _LoginPageState();
+}
+
+class _LoginPageState extends ConsumerState<LoginPage> {
+  final _formKey = GlobalKey<FormState>();
+  String _email = '';
+  String _password = '';
+  bool _loading = false;
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    _formKey.currentState!.save();
+
+    setState(() => _loading = true);
+    final ok =
+        await ref.read(authRepositoryProvider).login(_email, _password);
+    setState(() => _loading = false);
+
+    if (!mounted) return;
+    if (ok) {
+      context.go('/');
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Credenciales inválidas')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Iniciar sesión')),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Form(
+              key: _formKey,
+              child:
+                  Column(mainAxisSize: MainAxisSize.min, children: [
+                TextFormField(
+                  decoration:
+                      const InputDecoration(labelText: 'Email'),
+                  keyboardType: TextInputType.emailAddress,
+                  validator: (v) =>
+                      (v == null || v.isEmpty) ? 'Requerido' : null,
+                  onSaved: (v) =>
+                      _email = (v ?? '').trim(),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  decoration:
+                      const InputDecoration(labelText: 'Password'),
+                  obscureText: true,
+                  validator: (v) =>
+                      (v == null || v.isEmpty) ? 'Requerido' : null,
+                  onSaved: (v) => _password = v ?? '',
+                ),
+                const SizedBox(height: 24),
+                FilledButton.icon(
+                  onPressed: _loading ? null : _submit,
+                  icon: const Icon(Icons.login),
+                  label: Text(
+                      _loading ? 'Ingresando…' : 'Entrar'),
+                ),
+                TextButton(
+                  onPressed: () => context.go('/register'),
+                  child: const Text('Crear cuenta'),
+                ),
+              ]),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

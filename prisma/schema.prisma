@@ -1,0 +1,482 @@
+// Prisma ORM — Esquema base para plataforma de modelado colaborativo
+// Proveedor: PostgreSQL (recomendado)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ========= Enums =========
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  INVITED
+}
+
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum ProjectRole {
+  OWNER
+  EDITOR
+  READER
+}
+
+enum ProjectStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum Visibility {
+  PRIVATE
+  PUBLIC
+}
+
+enum JobType {
+  CODEGEN
+  VALIDATION
+  IMPORT
+  EXPORT
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELED
+  TIMED_OUT
+}
+
+enum ArtifactType {
+  SQL_DDL
+  MIGRATIONS_FLYWAY
+  MIGRATIONS_LIQUIBASE
+  SPRING_BOOT_PROJECT
+  OPENAPI_SPEC
+  POSTMAN_COLLECTION
+  TESTS_RESTASSURED
+  FLUTTER_APP
+  OTHER
+}
+
+enum DbEngine {
+  POSTGRESQL
+  MYSQL
+  MARIADB
+  SQLSERVER
+}
+
+enum MigrationTool {
+  FLYWAY
+  LIQUIBASE
+}
+
+enum AiSuggestionStatus {
+  PENDING
+  APPLIED
+  REJECTED
+}
+
+enum MergeStatus {
+  COMPLETED
+  CONFLICTS
+  ABORTED
+}
+
+// Acciones de auditoría (extensible)
+enum AuditAction {
+  PROJECT_CREATE
+  PROJECT_UPDATE
+  PROJECT_ARCHIVE
+  PROJECT_DELETE
+  PROJECT_RESTORE
+  PROJECT_TAGS_UPDATE
+
+  MEMBER_ADD
+  MEMBER_UPDATE
+  MEMBER_REMOVE
+
+  MODEL_EDIT
+  MODEL_IMPORT
+  MODEL_SNAPSHOT
+  BRANCH_CREATE
+  MERGE
+
+  ARTIFACT_GENERATE
+  ARTIFACT_PUBLISH
+
+  VALIDATION_RUN
+  AI_SUGGESTION_APPLY
+  AI_SUGGESTION_REJECT
+}
+
+// ========= Identidad & Organización =========
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  name         String?
+  passwordHash String? // para auth local (bcrypt)
+  avatarUrl    String?
+  authProvider String? // p.ej. "keycloak"
+  externalId   String?    @unique // sub/subject del IdP
+  status       UserStatus @default(ACTIVE)
+  lastLoginAt  DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  // Relaciones
+  workspaceMemberships WorkspaceMember[]
+  projectMemberships   ProjectMember[]
+  projectsCreated      Project[]         @relation("ProjectCreatedBy")
+  branchesCreated      Branch[]          @relation("BranchCreatedBy")
+  versionsAuthored     ModelVersion[]    @relation("ModelVersionAuthor")
+  jobsCreated          Job[]             @relation("JobCreatedBy")
+  validationRuns       ValidationRun[]   @relation("ValidationRunCreatedBy")
+  aiSuggestionsCreated AiSuggestion[]    @relation("AiSuggestionCreatedBy")
+  aiSuggestionsApplied AiSuggestion[]    @relation("AiSuggestionAppliedBy")
+  auditLogs            AuditLog[]        @relation("AuditActor")
+  Workspace            Workspace[]
+  Merge                Merge[]
+}
+
+model Workspace {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique // nombre-para-url
+  description String?
+  settings    Json? // cuotas, límites, flags
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdBy User              @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  members   WorkspaceMember[]
+  projects  Project[]
+  tags      Tag[]
+  auditLogs AuditLog[]
+
+  @@index([name])
+}
+
+model WorkspaceMember {
+  id          String        @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        WorkspaceRole @default(MEMBER)
+  invitedAt   DateTime? // para INVITED
+  joinedAt    DateTime?     @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+}
+
+// ========= Proyectos & Colaboración =========
+
+model Project {
+  id          String        @id @default(cuid())
+  workspaceId String
+  name        String
+  description String?
+  status      ProjectStatus @default(ACTIVE)
+  archivedAt  DateTime?
+  deletedAt   DateTime?
+  legalHold   Boolean       @default(false) // retención legal
+  createdById String
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy User      @relation("ProjectCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+
+  members       ProjectMember[]
+  tags          ProjectTag[]
+  branches      Branch[]
+  versions      ModelVersion[] // acceso por proyecto
+  artifacts     Artifact[]
+  jobs          Job[]
+  validations   ValidationRun[]
+  aiSuggestions AiSuggestion[]
+  diffs         ModelDiff[]
+  merges        Merge[]
+  auditLogs     AuditLog[]
+
+  codegenConfigs CodegenConfig[]
+
+  // Nombre único por espacio de trabajo
+  @@unique([workspaceId, name])
+  @@index([status])
+}
+
+model ProjectMember {
+  id        String      @id @default(cuid())
+  projectId String
+  userId    String
+  role      ProjectRole // OWNER/EDITOR/READER
+  addedAt   DateTime    @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@index([userId])
+}
+
+model Tag {
+  id          String  @id @default(cuid())
+  workspaceId String
+  name        String
+  color       String? // hex opcional
+
+  workspace Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  projects  ProjectTag[]
+
+  @@unique([workspaceId, name])
+}
+
+model ProjectTag {
+  projectId String
+  tagId     String
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tag     Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, tagId])
+}
+
+// ========= Versionado: ramas, snapshots, merges =========
+
+model Branch {
+  id          String   @id @default(cuid())
+  projectId   String
+  name        String
+  description String?
+  isDefault   Boolean  @default(false)
+  createdById String
+  createdAt   DateTime @default(now())
+
+  project        Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy      User           @relation("BranchCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  versions       ModelVersion[]
+  mergesAsSource Merge[]        @relation("MergeSource")
+  mergesAsTarget Merge[]        @relation("MergeTarget")
+
+  @@unique([projectId, name])
+  @@index([projectId, isDefault])
+}
+
+model ModelVersion {
+  id              String   @id @default(cuid())
+  projectId       String
+  branchId        String
+  parentVersionId String?
+  authorId        String
+  message         String?
+  content         Json // DSL del modelo
+  ydocSnapshot    Bytes? // snapshot CRDT (opcional)
+  createdAt       DateTime @default(now())
+
+  project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  branch        Branch         @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  parentVersion ModelVersion?  @relation("ModelVersionParent", fields: [parentVersionId], references: [id], onDelete: SetNull)
+  children      ModelVersion[] @relation("ModelVersionParent")
+  author        User           @relation("ModelVersionAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+
+  artifacts     Artifact[]
+  jobs          Job[]
+  validations   ValidationRun[]
+  aiSuggestions AiSuggestion[]  @relation("AiSuggestionBaseVersion")
+  diffsFrom     ModelDiff[]     @relation("DiffFrom")
+  diffsTo       ModelDiff[]     @relation("DiffTo")
+
+  mergesAsSource Merge[]        @relation("Merge_SourceVersion")
+  mergesAsTarget Merge[]        @relation("Merge_TargetVersion")
+  mergesAsResult Merge[]        @relation("Merge_ResultVersion")
+  AiSuggestion   AiSuggestion[]
+
+  @@index([projectId, branchId, createdAt])
+}
+
+model ModelDiff {
+  id            String   @id @default(cuid())
+  projectId     String
+  fromVersionId String
+  toVersionId   String
+  diff          Json // representación JSON del cambio
+  createdAt     DateTime @default(now())
+
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  fromVersion ModelVersion @relation("DiffFrom", fields: [fromVersionId], references: [id], onDelete: Cascade)
+  toVersion   ModelVersion @relation("DiffTo", fields: [toVersionId], references: [id], onDelete: Cascade)
+
+  @@unique([fromVersionId, toVersionId])
+  @@index([projectId, createdAt])
+}
+
+model Merge {
+  id              String      @id @default(cuid())
+  projectId       String
+  sourceBranchId  String
+  targetBranchId  String
+  sourceVersionId String
+  targetVersionId String
+  resultVersionId String?
+  status          MergeStatus @default(COMPLETED)
+  conflicts       Json?
+  createdById     String
+  createdAt       DateTime    @default(now())
+
+  project      Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sourceBranch Branch  @relation("MergeSource", fields: [sourceBranchId], references: [id], onDelete: Cascade)
+  targetBranch Branch  @relation("MergeTarget", fields: [targetBranchId], references: [id], onDelete: Cascade)
+
+  // Relación con ModelVersion — cada una con su propio nombre:
+  sourceVersion ModelVersion  @relation("Merge_SourceVersion", fields: [sourceVersionId], references: [id], onDelete: Restrict)
+  targetVersion ModelVersion  @relation("Merge_TargetVersion", fields: [targetVersionId], references: [id], onDelete: Restrict)
+  resultVersion ModelVersion? @relation("Merge_ResultVersion", fields: [resultVersionId], references: [id], onDelete: SetNull)
+
+  createdBy User @relation(fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([projectId, createdAt])
+}
+
+// ========= Artefactos, trabajos y configuración =========
+
+model CodegenConfig {
+  id            String        @id @default(cuid())
+  projectId     String
+  name          String
+  dbEngine      DbEngine      @default(POSTGRESQL)
+  migrationTool MigrationTool @default(FLYWAY)
+  packageBase   String // p.ej. "com.acme.demo"
+  options       Json? // flags varias (DTOs, mappers, seguridad, etc.)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  jobs      Job[]
+  artifacts Artifact[]
+
+  @@unique([projectId, name])
+}
+
+model Job {
+  id              String    @id @default(cuid())
+  projectId       String
+  modelVersionId  String?
+  codegenConfigId String?
+  type            JobType
+  status          JobStatus @default(QUEUED)
+  params          Json? // parámetros efectivos usados
+  error           Json?
+  queuedAt        DateTime  @default(now())
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  createdById     String
+
+  project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  modelVersion  ModelVersion?  @relation(fields: [modelVersionId], references: [id], onDelete: SetNull)
+  codegenConfig CodegenConfig? @relation(fields: [codegenConfigId], references: [id], onDelete: SetNull)
+  createdBy     User           @relation("JobCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  artifacts     Artifact[]
+
+  @@index([projectId, status, queuedAt])
+}
+
+model Artifact {
+  id              String       @id @default(cuid())
+  projectId       String
+  modelVersionId  String?
+  jobId           String?
+  codegenConfigId String?
+  type            ArtifactType
+  visibility      Visibility   @default(PRIVATE)
+  storageBucket   String
+  storageKey      String // ruta/clave en S3/MinIO
+  sizeBytes       BigInt?
+  checksumSha256  String?
+  metadata        Json? // info adicional (p.ej. versiones de plantillas)
+  createdAt       DateTime     @default(now())
+
+  project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  modelVersion  ModelVersion?  @relation(fields: [modelVersionId], references: [id], onDelete: SetNull)
+  job           Job?           @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  codegenConfig CodegenConfig? @relation(fields: [codegenConfigId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, type, createdAt])
+  @@index([storageBucket, storageKey], map: "artifact_storage_key_idx")
+}
+
+// ========= Calidad (validaciones) & IA =========
+
+model ValidationRun {
+  id             String    @id @default(cuid())
+  projectId      String
+  modelVersionId String
+  createdById    String
+  status         JobStatus @default(RUNNING) // reutilizamos el enum
+  report         Json? // errores/advertencias (1NF/2NF/3NF/BCNF, claves, etc.)
+  createdAt      DateTime  @default(now())
+  finishedAt     DateTime?
+
+  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  modelVersion ModelVersion @relation(fields: [modelVersionId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation("ValidationRunCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([projectId, createdAt])
+}
+
+model AiSuggestion {
+  id               String             @id @default(cuid())
+  projectId        String
+  modelVersionId   String // versión base para la sugerencia
+  requestedById    String
+  status           AiSuggestionStatus @default(PENDING)
+  rationale        String? // explicación de la IA
+  proposedPatch    Json // patch JSON aplicable al DSL
+  appliedById      String?
+  appliedVersionId String? // versión creada tras aplicar
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  project        Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  baseVersion    ModelVersion  @relation("AiSuggestionBaseVersion", fields: [modelVersionId], references: [id], onDelete: Cascade)
+  requestedBy    User          @relation("AiSuggestionCreatedBy", fields: [requestedById], references: [id], onDelete: Restrict)
+  appliedBy      User?         @relation("AiSuggestionAppliedBy", fields: [appliedById], references: [id], onDelete: SetNull)
+  appliedVersion ModelVersion? @relation(fields: [appliedVersionId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, status, createdAt])
+}
+
+// ========= Auditoría =========
+
+model AuditLog {
+  id          String      @id @default(cuid())
+  workspaceId String?
+  projectId   String?
+  actorId     String?
+  action      AuditAction
+  targetType  String // "Project" | "Branch" | "ModelVersion" | etc.
+  targetId    String?
+  metadata    Json?
+  createdAt   DateTime    @default(now())
+
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  project   Project?   @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  actor     User?      @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, createdAt])
+  @@index([workspaceId, createdAt])
+}

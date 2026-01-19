@@ -1,0 +1,36 @@
+package {{pkg}}.domain;
+
+import jakarta.persistence.*;
+import lombok.*;
+
+import java.io.Serializable;
+{{#each e.fields}}
+{{#if (eq this.javaType "java.time.LocalDate")}}import java.time.LocalDate;{{/if}}
+{{#if (eq this.javaType "java.time.Instant")}}import java.time.Instant;{{/if}}
+{{/each}}
+{{#if (some e.fields "java.util.UUID")}}import java.util.UUID;{{/if}}
+{{#if e.requiresSet}}import java.util.Set;{{/if}}
+
+@Entity
+@Table(name = "{{e.table}}")
+{{#if e.inheritanceBase}}@Inheritance(strategy = InheritanceType.JOINED){{/if}}
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class {{e.name}}{{#if e.extends}} extends {{e.extends}}{{/if}} implements Serializable{{#if e.implements.length}}, {{#each e.implements}}{{this}}{{#unless @last}}, {{/unless}}{{/each}}{{/if}} {
+
+  {{#each e.fields}}
+  {{#if this.pk}}@Id{{/if}}
+  @Column(name = "{{this.name}}"{{#unless this.nullable}}, nullable = false{{/unless}}{{#if this.unique}}, unique = true{{/if}})
+  private {{this.javaType}} {{this.name}};
+  {{/each}}
+
+  {{#if e.relationFields}}
+  {{#each e.relationFields}}
+  {{{this}}}
+
+  {{/each}}
+  {{/if}}
+}

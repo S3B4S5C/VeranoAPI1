@@ -1,0 +1,71 @@
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+class AppMenuDrawer extends StatelessWidget {
+  const AppMenuDrawer({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final location = GoRouter.of(context)
+    .routeInformationProvider
+    .value
+    .location;
+
+    void go(String route) {
+      Navigator.of(context).pop();
+      context.go(route);
+    }
+
+    return Drawer(
+      child: SafeArea(
+        child: ListView(
+          children: [
+            const DrawerHeader(
+              child: Align(
+                alignment: Alignment.bottomLeft,
+                child: Text(
+                  '{{appName}}',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+            // Inicio
+            {{#if entities.[0]}}
+            ListTile(
+              leading: const Icon(Icons.home),
+              title: const Text('Inicio'),
+              selected: location == '/',
+              onTap: () => go('/'),
+            ),
+            {{/if}}
+
+            // Entradas generadas por entidad
+            {{#each entities}}
+            ListTile(
+              leading: const Icon(Icons.list),
+              title: Text('{{name}}'),
+              selected: location.startsWith('/{{route}}'),
+              onTap: () => go('/{{route}}'),
+            ),
+            {{/each}}
+
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.logout),
+              title: const Text('Cerrar sesión'),
+              onTap: () async {
+                final sp = await SharedPreferences.getInstance();
+                await sp.remove('accessToken');
+                if (Navigator.of(context).canPop()) {
+                  Navigator.of(context).pop();
+                }
+                context.go('/login');
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

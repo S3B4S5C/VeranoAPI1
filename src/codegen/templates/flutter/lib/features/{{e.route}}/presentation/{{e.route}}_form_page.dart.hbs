@@ -1,0 +1,93 @@
+import 'package:flutter/material.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+
+import '../../../core/api_client.dart';
+import '../model/{{e.route}}.dart';
+
+class {{e.name}}FormPage extends ConsumerStatefulWidget {
+  final String? id;
+  const {{e.name}}FormPage({super.key, this.id});
+
+  @override
+  ConsumerState<{{e.name}}FormPage> createState() => _{{e.name}}FormPageState();
+}
+
+class _{{e.name}}FormPageState extends ConsumerState<{{e.name}}FormPage> {
+  final _formKey = GlobalKey<FormState>();
+  late {{e.name}} _model;
+
+  @override
+  void initState() {
+    super.initState();
+    _model = {{e.name}}.empty();
+    if (widget.id != null) {
+      _load();
+    }
+  }
+
+  Future<void> _load() async {
+    final api = ref.read(apiClientProvider);
+    final res =
+        await api.get<Map<String, dynamic>>('/api/{{e.route}}/${widget.id}');
+    setState(() {
+      _model = {{e.name}}.fromJson(res.data!);
+    });
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+    _formKey.currentState!.save();
+
+    final api = ref.read(apiClientProvider);
+    if (widget.id == null) {
+      await api.post('/api/{{e.route}}', data: _model.toJson());
+    } else {
+      await api.put('/api/{{e.route}}/${widget.id}', data: _model.toJson());
+    }
+
+    if (!mounted) return;
+    Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          widget.id == null ? 'Nuevo {{e.name}}' : 'Editar {{e.name}}',
+        ),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              children: [
+                {{#each e.scalarFields}}
+                TextFormField(
+                  initialValue: _model.{{name}}?.toString() ?? '',
+                  decoration: InputDecoration(labelText: '{{name}}'),
+                  validator: (v) => null,
+                  onSaved: (v) {
+                    _model = _model.copyWith(
+                      {{name}}: {{castFromString}},
+                    );
+                  },
+                ),
+                const SizedBox(height: 12),
+                {{/each}}
+                const SizedBox(height: 24),
+                FilledButton.icon(
+                  onPressed: _save,
+                  icon: const Icon(Icons.save),
+                  label: const Text('Guardar'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

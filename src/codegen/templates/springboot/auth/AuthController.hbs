@@ -1,0 +1,46 @@
+package {{pkg}}.web;
+
+import {{pkg}}.security.JwtTokenProvider;
+import {{pkg}}.service.UserService;
+import {{pkg}}.web.dto.*;
+import {{pkg}}.domain.User;
+
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/auth")
+@CrossOrigin
+public class AuthController {
+
+  private final AuthenticationManager authManager;
+  private final UserService users;
+  private final JwtTokenProvider jwt;
+
+  public AuthController(AuthenticationManager am, UserService us, JwtTokenProvider jwt) {
+    this.authManager = am; this.users = us; this.jwt = jwt;
+  }
+
+  @PostMapping("/register")
+  public ResponseEntity<AuthResponse> register(@RequestBody @Validated RegisterRequest req) {
+    User u = users.register(req.email(), req.password(), req.fullName());
+    String token = jwt.generate(u.getUsername());
+    return ResponseEntity.ok(new AuthResponse(token));
+  }
+
+  @PostMapping("/login")
+  public ResponseEntity<AuthResponse> login(@RequestBody @Validated LoginRequest req) {
+    authManager.authenticate(new UsernamePasswordAuthenticationToken(req.email(), req.password()));
+    String token = jwt.generate(req.email());
+    return ResponseEntity.ok(new AuthResponse(token));
+  }
+
+  @GetMapping("/me")
+  public User me(@AuthenticationPrincipal User u) {
+    return u;
+  }
+}

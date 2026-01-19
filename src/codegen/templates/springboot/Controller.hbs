@@ -1,0 +1,52 @@
+package {{pkg}}.web;
+
+import {{pkg}}.domain.{{e.name}};
+import {{pkg}}.service.{{e.name}}Service;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.NoSuchElementException;
+
+@CrossOrigin
+@RestController
+@RequestMapping("/api/{{e.route}}")
+public class {{e.name}}Controller {
+
+  private final {{e.name}}Service service;
+
+  public {{e.name}}Controller({{e.name}}Service service) {
+    this.service = service;
+  }
+
+  @GetMapping
+  public List<{{e.name}}> list() {
+    return service.findAll();
+  }
+
+  @GetMapping("/{id}")
+  public {{e.name}} get(@PathVariable {{e.idField.javaType}} id) {
+    return service.findById(id)
+        .orElseThrow(() -> new NoSuchElementException("Not found"));
+  }
+
+  @PostMapping
+  @ResponseStatus(HttpStatus.CREATED)
+  public {{e.name}} create(@RequestBody {{e.name}} body) {
+    return service.save(body);
+  }
+
+  @PutMapping("/{id}")
+  public {{e.name}} update(
+      @PathVariable {{e.idField.javaType}} id,
+      @RequestBody {{e.name}} body
+  ) {
+    return service.save(body);
+  }
+
+  @DeleteMapping("/{id}")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  public void delete(@PathVariable {{e.idField.javaType}} id) {
+    service.delete(id);
+  }
+}

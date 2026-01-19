@@ -1,0 +1,91 @@
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+import '../../../core/api_client.dart';
+
+/// Config de usuarios mockeados (puedes overridearla en tests o dev)
+final mockAuthConfigProvider = Provider<MockAuthConfig>((ref) {
+  return const MockAuthConfig(
+    enabled: true, // pon false para desactivar mocks
+    users: [
+      MockUser(
+        email: 'admin@demo.com',
+        password: 'admin123',
+        accessToken: 'mock-admin-token',
+      ),
+      MockUser(
+        email: 'user@demo.com',
+        password: 'user123',
+        accessToken: 'mock-user-token',
+      ),
+    ],
+  );
+});
+
+final authApiProvider = Provider<AuthApi>((ref) {
+  final api = ref.watch(apiClientProvider);
+  final mock = ref.watch(mockAuthConfigProvider);
+  return AuthApi(api, mock: mock);
+});
+
+class AuthApi {
+  final ApiClient _api;
+  final MockAuthConfig mock;
+
+  AuthApi(this._api, {this.mock = const MockAuthConfig()});
+
+  Future<String> login({
+    required String email,
+    required String password,
+  }) async {
+    // 1) Intento con usuarios mockeados
+    if (mock.enabled) {
+      final matches = mock.users.where((u) =>
+          u.email.toLowerCase() == email.toLowerCase() &&
+          u.password == password);
+      if (matches.isNotEmpty) {
+        // Opcional: simular latencia
+        // await Future<void>.delayed(const Duration(milliseconds: 150));
+        return matches.first.accessToken;
+      }
+    }
+
+    // 2) Si no hay mock, consulta la API real
+    final res = await _api.post<Map<String, dynamic>>(
+      '/api/auth/login',
+      data: {'email': email, 'password': password},
+    );
+    return (res.data?['accessToken'] as String?) ?? '';
+  }
+
+  Future<String> register({
+    required String email,
+    required String password,
+    required String fullName,
+  }) async {
+    final res = await _api.post<Map<String, dynamic>>(
+      '/api/auth/register',
+      data: {
+        'email': email,
+        'password': password,
+        'fullName': fullName,
+      },
+    );
+    return (res.data?['accessToken'] as String?) ?? '';
+  }
+}
+
+class MockAuthConfig {
+  final bool enabled;
+  final List<MockUser> users;
+  const MockAuthConfig({this.enabled = false, this.users = const []});
+}
+
+class MockUser {
+  final String email;
+  final String password;
+  final String accessToken;
+  const MockUser({
+    required this.email,
+    required this.password,
+    required this.accessToken,
+  });
+}

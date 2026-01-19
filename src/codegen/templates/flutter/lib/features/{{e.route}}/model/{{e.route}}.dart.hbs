@@ -1,0 +1,82 @@
+import 'package:flutter/foundation.dart';
+
+@immutable
+class {{e.name}} {
+  {{#each e.dartFields}}
+  final {{type}}{{nullable}} {{name}};
+  {{/each}}
+
+  const {{e.name}}({
+    {{#each e.dartFields}}
+    this.{{name}},
+    {{/each}}
+  });
+
+  /// Instancia vacía (todos los campos en null o valor por defecto)
+  factory {{e.name}}.empty() => {{e.name}}(
+    {{#each e.dartFields}}
+    {{name}}: {{emptyExpr}},
+    {{/each}}
+  );
+
+  {{e.name}} copyWith({
+    {{#each e.dartFields}}
+    {{type}}{{nullable}} {{name}},
+    {{/each}}
+  }) {
+    return {{e.name}}(
+      {{#each e.dartFields}}
+      {{name}}: {{name}} ?? this.{{name}},
+      {{/each}}
+    );
+  }
+
+  factory {{e.name}}.fromJson(Map<String, dynamic> j) {
+    return {{e.name}}(
+      {{#each e.dartFields}}
+      {{name}}: {{fromJson}},
+      {{/each}}
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      {{#each e.dartFields}}
+      '{{name}}': {{toJson}},
+      {{/each}}
+    };
+  }
+
+  // Usado por las páginas para rutas/ids (evita colisión con el campo `id`)
+  String get idOrEmpty => {{e.idName}}?.toString() ?? '';
+
+  // Heurísticas generadas en buildFlutterZip
+  String get titleText => {{e.titleExpr}};
+  String get subtitleText => {{e.subtitleExpr}};
+
+  @override
+  String toString() {
+    return '{{e.name}}('
+      {{#each e.dartFields}}
+      '{{name}}: ${{name}}, '
+      {{/each}}
+      ')';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is {{e.name}}
+      {{#each e.dartFields}}
+      && other.{{name}} == {{name}}
+      {{/each}}
+    ;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    {{#each e.dartFields}}
+    {{name}}{{#unless @last}},{{/unless}}
+    {{/each}}
+  );
+}

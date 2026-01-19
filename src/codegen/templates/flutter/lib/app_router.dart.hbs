@@ -1,0 +1,71 @@
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'features/auth/presentation/login_page.dart';
+import 'features/auth/presentation/register_page.dart';
+
+{{#each entities}}
+import 'features/{{route}}/presentation/{{route}}_list_page.dart';
+import 'features/{{route}}/presentation/{{route}}_form_page.dart';
+{{/each}}
+
+final isAuthenticatedProvider = FutureProvider<bool>((ref) async {
+  final sp = await SharedPreferences.getInstance();
+  return (sp.getString('accessToken') ?? '').isNotEmpty;
+});
+
+final appRouterProvider = Provider<GoRouter>((ref) {
+  return GoRouter(
+    initialLocation: '/login',
+    routes: [
+      GoRoute(
+        path: '/login',
+        builder: (c, s) => const LoginPage(),
+      ),
+      GoRoute(
+        path: '/register',
+        builder: (c, s) => const RegisterPage(),
+      ),
+
+      {{#if entities.[0]}}
+      // Home = lista de la primera entidad
+      GoRoute(
+        path: '/',
+        builder: (c, s) => const {{entities.[0].name}}ListPage(),
+      ),
+      {{/if}}
+
+      {{#each entities}}
+      GoRoute(
+        path: '/{{route}}',
+        builder: (c, s) => const {{name}}ListPage(),
+        routes: [
+          GoRoute(
+            path: 'new',
+            builder: (c, s) => const {{name}}FormPage(),
+          ),
+          GoRoute(
+            path: ':id',
+            builder: (c, s) =>
+                {{name}}FormPage(id: s.pathParameters['id']),
+          ),
+        ],
+      ),
+      {{/each}}
+    ],
+    redirect: (context, state) async {
+      final sp = await SharedPreferences.getInstance();
+      final hasToken =
+          (sp.getString('accessToken') ?? '').isNotEmpty;
+
+      final logging = state.matchedLocation.startsWith('/login') ||
+          state.matchedLocation.startsWith('/register');
+
+      if (!hasToken && !logging) return '/login';
+      if (hasToken && logging) return '/';
+      return null;
+    },
+  );
+});

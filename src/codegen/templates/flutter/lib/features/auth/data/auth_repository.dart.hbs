@@ -1,0 +1,45 @@
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'auth_api.dart';
+
+final authRepositoryProvider = Provider<AuthRepository>((ref) {
+  return AuthRepository(ref.read(authApiProvider));
+});
+
+class AuthRepository {
+  final AuthApi _api;
+  AuthRepository(this._api);
+
+  Future<void> _saveToken(String t) async {
+    final sp = await SharedPreferences.getInstance();
+    await sp.setString('accessToken', t);
+  }
+
+  Future<void> logout() async {
+    final sp = await SharedPreferences.getInstance();
+    await sp.remove('accessToken');
+  }
+
+  Future<bool> login(String email, String password) async {
+    final t = await _api.login(email: email, password: password);
+    if (t.isEmpty) return false;
+    await _saveToken(t);
+    return true;
+  }
+
+  Future<bool> register(
+    String email,
+    String password,
+    String fullName,
+  ) async {
+    final t = await _api.register(
+      email: email,
+      password: password,
+      fullName: fullName,
+    );
+    if (t.isEmpty) return false;
+    await _saveToken(t);
+    return true;
+  }
+}

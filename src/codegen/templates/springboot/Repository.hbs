@@ -1,0 +1,7 @@
+package {{pkg}}.repository;
+
+import {{pkg}}.domain.{{e.name}};
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface {{e.name}}Repository extends JpaRepository<{{e.name}}, {{e.idField.javaType}}> {
+}

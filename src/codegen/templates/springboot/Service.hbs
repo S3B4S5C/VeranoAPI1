@@ -1,0 +1,34 @@
+package {{pkg}}.service;
+
+import {{pkg}}.domain.{{e.name}};
+import {{pkg}}.repository.{{e.name}}Repository;
+import org.springframework.stereotype.Service;
+
+import java.util.List;
+import java.util.Optional;
+
+@Service
+public class {{e.name}}Service {
+
+  private final {{e.name}}Repository repo;
+
+  public {{e.name}}Service({{e.name}}Repository repo) {
+    this.repo = repo;
+  }
+
+  public List<{{e.name}}> findAll() {
+    return repo.findAll();
+  }
+
+  public Optional<{{e.name}}> findById({{e.idField.javaType}} id) {
+    return repo.findById(id);
+  }
+
+  public {{e.name}} save({{e.name}} entity) {
+    return repo.save(entity);
+  }
+
+  public void delete({{e.idField.javaType}} id) {
+    repo.deleteById(id);
+  }
+}

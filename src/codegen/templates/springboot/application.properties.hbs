@@ -1,0 +1,20 @@
+spring.datasource.url=jdbc:postgresql://localhost:5432/dbuml
+spring.datasource.username=postgres
+spring.datasource.password=changeme
+
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.properties.hibernate.jdbc.time_zone=UTC
+
+springdoc.api-docs.enabled=true
+springdoc.swagger-ui.enabled=true
+
+server.port=8080
+
+{{#if includeAuth}}
+# JWT
+app.jwt.secret=change-me-super-secret-key-change-me-change-me
+app.jwt.expiration=86400000
+
+# CORS (patrón). Usa * o tu URL de frontend.
+app.cors=*
+{{/if}}
